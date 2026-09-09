@@ -198,6 +198,9 @@ export default function Dashboard() {
           <Link to="/history" className="bold-link" style={{ borderColor: '#ff3333', color: '#ff3333', marginTop: '0.75rem' }}>
             VIEW HISTORY
           </Link>
+          <Link to="/compare" className="bold-link" style={{ borderColor: '#30d158', color: '#30d158', marginTop: '0.75rem' }}>
+            ⚡ UGD COMPARISON
+          </Link>
         </div>
       </div>
     </div>

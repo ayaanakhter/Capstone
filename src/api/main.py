@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from src.detector.model import LieDetectorModel
+from src.detector.model import LieDetectorModel, UGDTokenSignal
 from src.api.database import init_db, get_db, Session as SessionModel
 
 app = FastAPI(title="Hallucination Monitor API")
@@ -132,6 +132,102 @@ async def generate_stream(req: GenerateRequest, db: DBSession = Depends(get_db))
                 print(f"DB save failed: {e}")
 
         yield f"data: {json.dumps({'event': 'end', 'full_text': full_text})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/generate/ugd")
+async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
+    """
+    Uncertainty-Gated Decoding endpoint.
+    Each token is evaluated and either accepted, corrected, or retracted.
+    Streams UGD events with status per token.
+    """
+    components = get_detector()
+    model = components["model"]
+
+    print(f"[UGD] Streaming for prompt: '{req.prompt}'")
+
+    ugd_generator = model.generate_stream_ugd(
+        req.prompt,
+        max_new_tokens=req.max_tokens,
+        mc_dropout_passes=2,
+        warn_threshold=0.40,
+        retract_threshold=0.65,
+    )
+
+    async def event_generator():
+        yield f"data: {json.dumps({'event': 'start'})}\n\n"
+
+        full_text = ""
+        all_risk = []
+        all_entropy = []
+        all_grad = []
+        all_mc = []
+        flagged = 0
+        corrected_count = 0
+        retracted = False
+
+        for sig in ugd_generator:
+            norm_e = min(sig.entropy / 10.0, 1.0)
+            norm_g = min(sig.gradient_norm / 10.0, 1.0)
+            norm_m = min(sig.mc_variance / 1.0, 1.0)
+
+            all_risk.append(sig.risk_score)
+            all_entropy.append(norm_e)
+            all_grad.append(norm_g)
+            all_mc.append(norm_m)
+
+            if sig.status == "corrected":
+                corrected_count += 1
+                flagged += 1
+            if sig.status == "retracted":
+                flagged += 1
+                retracted = True
+
+            if sig.token:
+                full_text += sig.token
+
+            mean_risk = sum(all_risk) / len(all_risk)
+
+            payload = {
+                "event":            "token",
+                "token":            sig.token,
+                "original_token":   sig.original_token,
+                "status":           sig.status,          # accepted | corrected | retracted
+                "confidence":       float(sig.confidence),
+                "entropy":          float(norm_e),
+                "gradient_norm":    float(norm_g),
+                "mc_variance":      float(norm_m),
+                "risk_score":       float(sig.risk_score),
+                "corrected_risk":   float(sig.corrected_risk),
+                "overall_risk":     float(mean_risk),
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+            await asyncio.sleep(0.01)
+
+            if retracted:
+                break
+
+        # Save session to DB
+        if all_risk:
+            try:
+                record = SessionModel(
+                    prompt=req.prompt,
+                    response=f"[UGD] {full_text.strip()}" + (" [GENERATION RETRACTED]" if retracted else ""),
+                    hallucination_risk=float(np.mean(all_risk)),
+                    avg_entropy=float(np.mean(all_entropy)),
+                    avg_gradient_norm=float(np.mean(all_grad)),
+                    avg_mc_variance=float(np.mean(all_mc)),
+                    total_tokens=len(all_risk),
+                    flagged_tokens=flagged,
+                )
+                db.add(record)
+                db.commit()
+            except Exception as e:
+                print(f"DB save failed: {e}")
+
+        yield f"data: {json.dumps({'event': 'end', 'full_text': full_text, 'retracted': retracted, 'corrected_count': corrected_count})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

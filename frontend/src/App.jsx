@@ -4,6 +4,7 @@ import LandingPage from './LandingPage';
 import Dashboard from './Dashboard';
 import ArchitecturePage from './ArchitecturePage';
 import HistoryPage from './HistoryPage';
+import ComparisonPage from './ComparisonPage';
 import './index.css';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/architecture" element={<ArchitecturePage />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/compare" element={<ComparisonPage />} />
       </Routes>
     </Router>
   );
