@@ -195,6 +195,9 @@ export default function Dashboard() {
           <Link to="/architecture" className="bold-link" style={{ borderColor: '#111', color: '#111' }}>
             VIEW ARCHITECTURE
           </Link>
+          <Link to="/history" className="bold-link" style={{ borderColor: '#ff3333', color: '#ff3333', marginTop: '0.75rem' }}>
+            VIEW HISTORY
+          </Link>
         </div>
       </div>
     </div>

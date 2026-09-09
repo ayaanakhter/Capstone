@@ -300,6 +300,18 @@ button:disabled {
   color: var(--accent-red);
 }
 
+/* History Card */
+.history-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  transition: border-color 0.2s ease;
+  animation: slideUp 0.4s ease both;
+}
+.history-card:hover {
+  border-color: #333;
+}
+
 /* ─────────────────────────────────────────────────────
    LANDING PAGE
 ───────────────────────────────────────────────────── */
