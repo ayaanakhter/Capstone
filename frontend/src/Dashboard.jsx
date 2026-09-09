@@ -168,10 +168,11 @@ export default function Dashboard() {
         </h2>
         
         <div style={{ flexGrow: 1 }}>
-          <Gauge 
+          <StatBlock 
             value={currentScore} 
             label="Hallucination Risk" 
-            color="var(--accent-red)" 
+            max={1.0}
+            format="percent"
           />
           
           <StatBlock 
