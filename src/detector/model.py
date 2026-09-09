@@ -32,7 +32,7 @@ class GenerationOutput:
 
 @dataclass
 class UGDTokenSignal:
-    """Token signal with UGD gate status."""
+    """Token signal with UGD gate status and XAI diagnosis."""
     token: str           # Emitted token (empty string if retracted)
     original_token: str  # Token the model originally wanted to emit
     status: str          # "accepted" | "warned" | "retracted"
@@ -42,6 +42,7 @@ class UGDTokenSignal:
     mc_variance: float
     risk_score: float    # 0–1 hallucination risk
     corrected_risk: float
+    diagnosis: str       # Human-readable explanation of why it was flagged
 
 
 class LieDetectorModel:
@@ -171,6 +172,7 @@ class LieDetectorModel:
                 mc_variance = F.softmax(stacked, dim=-1).max(dim=-1).values.var(dim=0).item()
 
             risk = self._compute_risk(confidence, entropy, grad_norm, mc_variance)
+            diagnosis = self._get_diagnosis(entropy, grad_norm, mc_variance)
 
             next_token_id = self._sample_token(last_logits, temperature=temperature, top_k=top_k, top_p=top_p)
             if next_token_id.item() == self.tokenizer.eos_token_id:
@@ -184,6 +186,7 @@ class LieDetectorModel:
                     confidence=confidence, entropy=entropy,
                     gradient_norm=grad_norm, mc_variance=mc_variance,
                     risk_score=risk, corrected_risk=0.0,
+                    diagnosis=diagnosis
                 )
                 break
 
@@ -195,6 +198,7 @@ class LieDetectorModel:
                 confidence=confidence, entropy=entropy,
                 gradient_norm=grad_norm, mc_variance=mc_variance,
                 risk_score=risk, corrected_risk=0.0,
+                diagnosis=diagnosis
             )
 
     # ─────────────────────────────────────────────
@@ -217,6 +221,26 @@ class LieDetectorModel:
         raw = 0.15 * norm_e + 0.30 * norm_g + 0.25 * norm_m
         x = 5.0 * (confidence * raw - 0.3)
         return float(1 / (1 + np.exp(-x)))
+
+    def _get_diagnosis(self, entropy: float, grad_norm: float, mc_variance: float) -> str:
+        """Determines the primary cause of hallucination risk."""
+        norm_e = min(entropy / 10.0, 1.0)
+        norm_g = min(grad_norm / 10.0, 1.0)
+        norm_m = min(mc_variance / 1.0, 1.0)
+        
+        scores = {
+            "Vocabulary Confusion (High Entropy)": norm_e,
+            "Context Shock (High Gradient Norm)": norm_g,
+            "Fragile Memory (High MC Variance)": norm_m
+        }
+        
+        primary_cause = max(scores, key=scores.get)
+        
+        # If all scores are extremely low, it's not a hallucination, just standard confidence
+        if scores[primary_cause] < 0.1:
+            return "Normal Generation"
+            
+        return primary_cause
 
     def _forward_with_grads(self, input_ids: torch.Tensor, compute_grads: bool = True):
         self.model.eval()

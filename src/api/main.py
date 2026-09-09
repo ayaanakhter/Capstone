@@ -1,6 +1,7 @@
 import sys
 import os
 import asyncio
+import wikipedia
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -178,8 +179,7 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
             all_grad.append(norm_g)
             all_mc.append(norm_m)
 
-            if sig.status == "corrected":
-                corrected_count += 1
+            if sig.status == "warned":
                 flagged += 1
             if sig.status == "retracted":
                 flagged += 1
@@ -194,7 +194,7 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
                 "event":            "token",
                 "token":            sig.token,
                 "original_token":   sig.original_token,
-                "status":           sig.status,          # accepted | corrected | retracted
+                "status":           sig.status,
                 "confidence":       float(sig.confidence),
                 "entropy":          float(norm_e),
                 "gradient_norm":    float(norm_g),
@@ -202,12 +202,58 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
                 "risk_score":       float(sig.risk_score),
                 "corrected_risk":   float(sig.corrected_risk),
                 "overall_risk":     float(mean_risk),
+                "diagnosis":        sig.diagnosis,
             }
             yield f"data: {json.dumps(payload)}\n\n"
             await asyncio.sleep(0.01)
 
             if retracted:
                 break
+        
+        # --- AUTO-RAG FALLBACK ---
+        if retracted:
+            yield f"data: {json.dumps({'event': 'rag_search_start', 'query': req.prompt})}\n\n"
+            
+            # Offload blocking Wikipedia call to thread
+            try:
+                loop = asyncio.get_event_loop()
+                search_result = await loop.run_in_executor(None, lambda: wikipedia.summary(req.prompt, sentences=2))
+            except Exception as e:
+                search_result = f"Could not find information for '{req.prompt}'."
+
+            yield f"data: {json.dumps({'event': 'rag_search_result', 'result': search_result})}\n\n"
+            
+            # Restart generation with grounded context
+            rag_prompt = f"Background context: {search_result}\n\nQuestion: {req.prompt}"
+            print(f"[UGD] RAG Fallback starting for: {req.prompt}")
+            
+            # We use standard generate_stream with NO uncertainty math (compute_grads=False, mc_dropout_passes=0)
+            # This makes it super fast and low RAM, since we trust the Wikipedia context.
+            rag_generator = model.generate_stream(
+                rag_prompt,
+                max_new_tokens=req.max_tokens,
+                compute_grads=False,
+                mc_dropout_passes=0
+            )
+            
+            for rag_sig in rag_generator:
+                full_text += rag_sig.token
+                payload = {
+                    "event": "token",
+                    "token": rag_sig.token,
+                    "original_token": rag_sig.token,
+                    "status": "grounded", # Special UI status for Self-Healed text
+                    "confidence": float(rag_sig.confidence),
+                    "entropy": 0.0,
+                    "gradient_norm": 0.0,
+                    "mc_variance": 0.0,
+                    "risk_score": 0.0,
+                    "corrected_risk": 0.0,
+                    "overall_risk": 0.0,
+                    "diagnosis": "Self-Healed (RAG)"
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+                await asyncio.sleep(0.01)
 
         # Save session to DB
         if all_risk:

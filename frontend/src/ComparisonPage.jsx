@@ -34,13 +34,13 @@ function UGDToken({ token }) {
   if (token.status === 'warned') {
     return (
       <span
-        title={`Risky token — ${Math.round(token.risk_score * 100)}% hallucination risk`}
+        title={`Risky token: ${token.diagnosis || 'High Hallucination Risk'} (${Math.round(token.risk_score * 100)}%)`}
         style={{
           background: 'rgba(255,149,0,0.15)',
           borderBottom: '2px solid #ff9500',
           color: '#ffb830',
           padding: '0 1px',
-          cursor: 'default',
+          cursor: 'help',
         }}
       >
         {token.token}
@@ -50,14 +50,31 @@ function UGDToken({ token }) {
 
   if (token.status === 'retracted') {
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-        background: 'rgba(255,51,51,0.12)', border: '1px solid #ff3333',
-        color: '#ff3333', padding: '0.2rem 0.75rem', borderRadius: '2px',
-        fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em',
-        marginLeft: '4px',
-      }}>
+      <span 
+        title={`Retracted due to: ${token.diagnosis || 'High Hallucination Risk'} (${Math.round(token.risk_score * 100)}%)`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+          background: 'rgba(255,51,51,0.12)', border: '1px solid #ff3333',
+          color: '#ff3333', padding: '0.2rem 0.75rem', borderRadius: '2px',
+          fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em',
+          marginLeft: '4px', cursor: 'help'
+        }}
+      >
         🛑 STOPPED — model was about to say "<em style={{ fontStyle: 'italic', fontWeight: 400 }}>{token.original_token}</em>"
+      </span>
+    );
+  }
+
+  if (token.status === 'grounded') {
+    return (
+      <span
+        title="Self-Healed: Token generated using verified Wikipedia context"
+        style={{
+          color: '#33ccff',
+          textShadow: '0 0 8px rgba(51, 204, 255, 0.4)',
+        }}
+      >
+        {token.token}
       </span>
     );
   }
@@ -65,7 +82,7 @@ function UGDToken({ token }) {
   return <span>{token.token}</span>;
 }
 
-function Panel({ title, icon, accentColor, tokens, isGenerating, mode, onSubmit, prompt, setPrompt, stats, retracted, correctedCount, loadingMsg }) {
+function Panel({ title, icon, accentColor, tokens, isGenerating, isRagSearching, mode, onSubmit, prompt, setPrompt, stats, retracted, correctedCount, loadingMsg }) {
   const isUGD = mode === 'ugd';
   return (
     <div style={{
@@ -100,11 +117,6 @@ function Panel({ title, icon, accentColor, tokens, isGenerating, mode, onSubmit,
             STOPPED EARLY
           </span>
         )}
-        {isUGD && correctedCount > 0 && !retracted && (
-          <span style={{ marginLeft: 'auto', fontSize: '0.7rem', fontWeight: 900, color: '#30d158', letterSpacing: '0.1em' }}>
-            ✓ {correctedCount} CORRECTED
-          </span>
-        )}
       </div>
 
       {/* Output */}
@@ -112,12 +124,12 @@ function Panel({ title, icon, accentColor, tokens, isGenerating, mode, onSubmit,
         flex: 1, overflowY: 'auto', padding: '1.5rem',
         fontSize: '1rem', lineHeight: 1.9, minHeight: 200,
       }}>
-        {tokens.length === 0 && !isGenerating && (
+        {tokens.length === 0 && !isGenerating && !isRagSearching && (
           <p style={{ color: '#444', margin: 0, fontStyle: 'italic', fontSize: '0.9rem' }}>
             Output will appear here once you run the analysis...
           </p>
         )}
-        {tokens.length === 0 && isGenerating && (
+        {tokens.length === 0 && isGenerating && !isRagSearching && (
           <p style={{ color: '#555', margin: 0, fontSize: '0.85rem', animation: 'pulse 1.2s infinite', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
             {loadingMsg}
           </p>
@@ -128,8 +140,19 @@ function Panel({ title, icon, accentColor, tokens, isGenerating, mode, onSubmit,
               ? <UGDToken key={i} token={t} />
               : <StandardToken key={i} token={t} />
           )}
-          {isGenerating && tokens.length > 0 && <span style={{ opacity: 0.4, animation: 'pulse 1s infinite' }}>▌</span>}
+          {isGenerating && tokens.length > 0 && !isRagSearching && <span style={{ opacity: 0.4, animation: 'pulse 1s infinite' }}>▌</span>}
         </p>
+        
+        {/* RAG Searching UI */}
+        {isRagSearching && (
+          <div style={{
+            marginTop: '1rem', padding: '0.75rem', background: 'rgba(51, 204, 255, 0.1)',
+            borderLeft: '2px solid #33ccff', color: '#33ccff', fontSize: '0.85rem',
+            animation: 'pulse 1.2s infinite', display: 'flex', alignItems: 'center', gap: '0.5rem'
+          }}>
+            🔍 <b>Self-Healing:</b> Searching Wikipedia for ground truth...
+          </div>
+        )}
       </div>
 
       {/* Stats Footer */}
@@ -162,6 +185,7 @@ export default function ComparisonPage() {
   const [stdStats, setStdStats]         = useState(null);
   const [ugdStats, setUgdStats]         = useState(null);
   const [ugdRetracted, setUgdRetracted] = useState(false);
+  const [isRagSearching, setIsRagSearching] = useState(false);
   const [correctedCount, setCorrectedCount] = useState(0);
   const [hasRun, setHasRun]             = useState(false);
 
@@ -173,6 +197,7 @@ export default function ComparisonPage() {
     setStdStats(null);
     setUgdStats(null);
     setUgdRetracted(false);
+    setIsRagSearching(false);
     setCorrectedCount(0);
     setStdGenerating(true);
     setUgdGenerating(true);
@@ -248,9 +273,15 @@ export default function ComparisonPage() {
               allEntropy.push(data.entropy);
               allGrad.push(data.gradient_norm);
               if (data.status === 'corrected') corrected++;
-              if (data.status === 'retracted') { wasRetracted = true; setUgdRetracted(true); }
-            }
-            if (data.event === 'end') {
+              if (data.status === 'retracted') {
+                wasRetracted = true;
+                setUgdRetracted(true);
+              }
+            } else if (data.event === 'rag_search_start') {
+              setIsRagSearching(true);
+            } else if (data.event === 'rag_search_result') {
+              setIsRagSearching(false);
+            } else if (data.event === 'end') {
               setCorrectedCount(data.corrected_count || corrected);
             }
           } catch (_) {}
@@ -302,6 +333,7 @@ export default function ComparisonPage() {
         <span style={{ fontSize: '0.7rem', color: '#e0e0e0', fontWeight: 600 }}>⬜ Accepted (safe)</span>
         <span style={{ fontSize: '0.7rem', color: '#ffb830', fontWeight: 600 }}>🟠 Warned (risky — hover for score)</span>
         <span style={{ fontSize: '0.7rem', color: '#ff3333', fontWeight: 600 }}>🛑 Retracted (generation stopped)</span>
+        <span style={{ fontSize: '0.7rem', color: '#33ccff', fontWeight: 600 }}>🔵 Self-Healed (Auto-RAG)</span>
         <span style={{ fontSize: '0.7rem', color: '#ff9999', fontWeight: 600, marginLeft: 'auto' }}>Standard: <span style={{ borderBottom: '2px solid #ff3333' }}>underline = flagged</span></span>
       </div>
 
@@ -325,6 +357,7 @@ export default function ComparisonPage() {
           accentColor="#30d158"
           tokens={ugdTokens}
           isGenerating={ugdGenerating}
+          isRagSearching={isRagSearching}
           mode="ugd"
           stats={ugdStats}
           retracted={ugdRetracted}
