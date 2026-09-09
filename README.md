@@ -1,4 +1,4 @@
-# 🕵️‍♂️ Hallucination Monitor
+# Hallucination Monitor
 
 **The Hallucination Monitor** is a Mechanistic Interpretability dashboard designed to catch Large Language Models (LLMs) hallucinating in real-time. 
 
