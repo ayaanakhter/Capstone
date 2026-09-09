@@ -22,6 +22,7 @@ class TokenSignal:
     entropy: float
     gradient_norm: float
     mc_variance: float
+    diagnosis: str
 
 
 @dataclass
@@ -121,12 +122,15 @@ class LieDetectorModel:
             token_str = self.tokenizer.decode([next_token_id.item()], skip_special_tokens=True)
             current_ids = torch.cat([current_ids, next_token_id.unsqueeze(0).unsqueeze(0).to(self.device)], dim=1)
 
+            diagnosis = self._get_diagnosis(entropy, grad_norm, mc_variance)
+
             yield TokenSignal(
                 token=token_str,
                 confidence=confidence,
                 entropy=entropy,
                 gradient_norm=grad_norm,
                 mc_variance=mc_variance,
+                diagnosis=diagnosis
             )
 
     # ─────────────────────────────────────────────

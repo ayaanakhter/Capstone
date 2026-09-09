@@ -17,9 +17,14 @@ const FEATURES = [
     title: 'MC Dropout Variance',
     desc: 'Runs stochastic forward passes to test if the model changes its story when its neurons are randomly disabled.'
   },
+  {
+    icon: '⟳',
+    title: 'Auto-RAG Healing',
+    desc: 'When a hallucination is detected, the model halts and fetches verified context to heal the output.'
+  }
 ];
 
-// Animated ticker — scrolls phrases across a horizontal marquee
+// Animated ticker
 function Ticker() {
   const phrases = [
     'MECHANISTIC INTERPRETABILITY',
@@ -45,50 +50,29 @@ function Cursor() {
   return <span className="blink-cursor">|</span>;
 }
 
-// Animated number counter
-function Counter({ target, suffix = '' }) {
-  const [val, setVal] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const step = Math.ceil(target / 60);
-    const interval = setInterval(() => {
-      start += step;
-      if (start >= target) { setVal(target); clearInterval(interval); }
-      else setVal(start);
-    }, 16);
-    return () => clearInterval(interval);
-  }, [target]);
-  return <>{val.toLocaleString()}{suffix}</>;
-}
-
-export default function LandingPage() {
-  const navigate = useNavigate();
+// Neural Network 3D Animation Component
+function NeuralAnimation() {
   const canvasRef = useRef(null);
-  const [visible, setVisible] = useState(false);
 
-  // Fade in on mount
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 50);
-    return () => clearTimeout(t);
-  }, []);
-
-  // Particle canvas background
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animId;
     let w, h;
-    const PARTICLES = 80;
-
-    const particles = Array.from({ length: PARTICLES }, () => ({
-      x: Math.random(),
-      y: Math.random(),
-      vx: (Math.random() - 0.5) * 0.0003,
-      vy: (Math.random() - 0.5) * 0.0003,
-      r: Math.random() * 1.5 + 0.5,
-      alpha: Math.random() * 0.5 + 0.1,
-    }));
+    const NODES = 60;
+    
+    // Abstract 3D sphere representing an LLM
+    const nodes = Array.from({ length: NODES }, () => {
+      const theta = Math.random() * 2 * Math.PI;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      return {
+        theta, phi,
+        speedTheta: (Math.random() - 0.5) * 0.02,
+        speedPhi: (Math.random() - 0.5) * 0.02,
+        r: 150
+      };
+    });
 
     function resize() {
       w = canvas.width = canvas.offsetWidth;
@@ -97,32 +81,55 @@ export default function LandingPage() {
 
     function draw() {
       ctx.clearRect(0, 0, w, h);
+      const cx = w / 2;
+      const cy = h / 2;
+
+      // Update positions
+      nodes.forEach(n => {
+        n.theta += n.speedTheta;
+        n.phi += n.speedPhi;
+        
+        // 3D to 2D projection
+        const x3d = n.r * Math.sin(n.phi) * Math.cos(n.theta);
+        const y3d = n.r * Math.cos(n.phi);
+        const z3d = n.r * Math.sin(n.phi) * Math.sin(n.theta) + 300;
+        
+        const scale = 400 / z3d;
+        n.px = cx + x3d * scale;
+        n.py = cy + y3d * scale;
+        n.scale = scale;
+      });
 
       // Draw connections
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = (particles[i].x - particles[j].x) * w;
-          const dy = (particles[i].y - particles[j].y) * h;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].px - nodes[j].px;
+          const dy = nodes[i].py - nodes[j].py;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
+          if (dist < 80) {
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(255,51,51,${0.15 * (1 - dist / 120)})`;
-            ctx.lineWidth = 0.5;
-            ctx.moveTo(particles[i].x * w, particles[i].y * h);
-            ctx.lineTo(particles[j].x * w, particles[j].y * h);
+            ctx.strokeStyle = `rgba(255, 51, 51, ${0.3 * (1 - dist / 80)})`;
+            ctx.lineWidth = 1;
+            ctx.moveTo(nodes[i].px, nodes[i].py);
+            ctx.lineTo(nodes[j].px, nodes[j].py);
             ctx.stroke();
           }
         }
       }
 
-      // Draw particles
-      particles.forEach((p) => {
-        p.x = (p.x + p.vx + 1) % 1;
-        p.y = (p.y + p.vy + 1) % 1;
+      // Draw nodes
+      nodes.forEach((n, i) => {
         ctx.beginPath();
-        ctx.arc(p.x * w, p.y * h, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,51,51,${p.alpha})`;
+        ctx.arc(n.px, n.py, 2 * n.scale, 0, Math.PI * 2);
+        ctx.fillStyle = i % 5 === 0 ? 'rgba(48, 209, 88, 0.8)' : `rgba(255, 255, 255, ${0.2 * n.scale})`;
         ctx.fill();
+        
+        if (i % 5 === 0) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'rgba(48, 209, 88, 0.8)';
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
       });
 
       animId = requestAnimationFrame(draw);
@@ -137,11 +144,41 @@ export default function LandingPage() {
     };
   }, []);
 
-  return (
-    <div className={`landing-page ${visible ? 'landing-visible' : ''}`}>
+  return <canvas ref={canvasRef} className="llm-animation-container" />;
+}
 
-      {/* Particle Background */}
-      <canvas ref={canvasRef} className="landing-canvas" />
+export default function LandingPage() {
+  const navigate = useNavigate();
+  const [visible, setVisible] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+  const [introFadeOut, setIntroFadeOut] = useState(false);
+
+  useEffect(() => {
+    // Start intro sequence
+    const t1 = setTimeout(() => {
+      setIntroFadeOut(true); // Start fading out intro
+    }, 3000);
+
+    const t2 = setTimeout(() => {
+      setShowIntro(false); // Remove intro completely
+      setVisible(true); // Fade in landing page
+    }, 4500);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
+  return (
+    <>
+      {showIntro && (
+        <div className={`intro-screen ${introFadeOut ? 'fade-out' : ''}`}>
+          <div className="glass-text">HALLUCINATION</div>
+        </div>
+      )}
+
+      <div className={`landing-page ${visible ? 'landing-visible' : ''}`}>
 
       {/* Top Nav */}
       <nav className="landing-nav">
@@ -151,87 +188,95 @@ export default function LandingPage() {
         <span className="landing-nav-tag">Capstone Project · 2026</span>
       </nav>
 
-      {/* Hero */}
-      <section className="landing-hero">
-        <div className="landing-eyebrow">
-          <span className="badge">LIVE DEMO READY</span>
-          <span className="badge-sep" />
-          <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', letterSpacing: '0.1em' }}>
-            MECHANISTIC INTERPRETABILITY ENGINE
-          </span>
+      {/* Hero: Split Layout */}
+      <section className="split-hero">
+        <div className="hero-left">
+          <div className="landing-eyebrow">
+            <span className="badge">LIVE DEMO READY</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Mechanistic Interpretability Engine
+            </span>
+          </div>
+
+          <h1 className="title-massive">
+            HALLUCI<br />
+            <span style={{ color: 'var(--accent-red)' }}>NATION</span><br />
+            <span style={{ WebkitTextStroke: '2px var(--text-primary)', color: 'transparent' }}>MONITOR</span>
+          </h1>
+
+          <p className="landing-subtitle">
+            A real-time AI safety dashboard that hooks deep into a language model's
+            internal math — catching hallucinations <em>as they are generated</em>,
+            token by token. <Cursor />
+          </p>
+
+          <div>
+            <button className="landing-cta" onClick={() => navigate('/dashboard')}>
+              <span>GET STARTED</span>
+              <span className="cta-arrow">→</span>
+            </button>
+          </div>
         </div>
-
-        <h1 className="landing-title">
-          HALLUCI<br />
-          <span style={{ color: 'var(--accent-red)' }}>NATION</span><br />
-          <span className="landing-title-outline">MONITOR</span>
-        </h1>
-
-        <p className="landing-subtitle">
-          A real-time AI safety dashboard that hooks deep into a language model's<br />
-          internal math — catching hallucinations <em>as they are generated</em>,<br />
-          token by token. <Cursor />
-        </p>
-
-        <button
-          className="landing-cta"
-          onClick={() => navigate('/dashboard')}
-        >
-          <span>GET STARTED</span>
-          <span className="cta-arrow">→</span>
-        </button>
+        
+        <div className="hero-right">
+          <NeuralAnimation />
+          {/* Annotation Lines simulating the reference image's layout */}
+          <div className="annotation-line" style={{ top: '30%', left: '30%', width: '150px', transform: 'rotate(-25deg)' }} />
+          <div className="annotation-text" style={{ top: '22%', left: '25%' }}>Gradient Norm</div>
+          
+          <div className="annotation-line" style={{ top: '65%', left: '40%', width: '120px', transform: 'rotate(15deg)' }} />
+          <div className="annotation-text" style={{ top: '75%', left: '45%' }}>Dropout Variance</div>
+          
+          <div className="annotation-line" style={{ top: '45%', right: '20%', width: '180px', transform: 'rotate(170deg)', transformOrigin: 'right center' }} />
+          <div className="annotation-text" style={{ top: '42%', right: '10%' }}>Softmax Entropy</div>
+        </div>
       </section>
 
       {/* Ticker */}
       <Ticker />
 
-      {/* Stats Row */}
-      <section className="landing-stats">
-        <div className="stat-item">
-          <span className="stat-number"><Counter target={600} suffix="+" /></span>
-          <span className="stat-label">Parameters Monitored Per Token</span>
-        </div>
-        <div className="stat-divider" />
-        <div className="stat-item">
-          <span className="stat-number"><Counter target={3} /></span>
-          <span className="stat-label">Uncertainty Signals Extracted</span>
-        </div>
-        <div className="stat-divider" />
-        <div className="stat-item">
-          <span className="stat-number"><Counter target={500} suffix="M" /></span>
-          <span className="stat-label">Model Parameters (Qwen 0.5B)</span>
-        </div>
-        <div className="stat-divider" />
-        <div className="stat-item">
-          <span className="stat-number">~0ms</span>
-          <span className="stat-label">Streaming Latency (SSE)</span>
-        </div>
-      </section>
-
-      {/* Feature Cards */}
-      <section className="landing-features">
-        <p className="section-label">HOW IT WORKS</p>
-        <div className="feature-grid">
+      {/* Horizontal Carousel (Ref Image Layout) */}
+      <section className="carousel-section">
+        <p style={{ fontSize: '0.85rem', fontWeight: 900, color: 'var(--accent-red)', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '2rem' }}>HOW IT WORKS</p>
+        <h2 className="carousel-header">Deep Model Inspection</h2>
+        <div className="carousel-container">
           {FEATURES.map((f, i) => (
-            <div key={i} className="feature-card" style={{ animationDelay: `${i * 0.15}s` }}>
-              <div className="feature-icon">{f.icon}</div>
-              <h3 className="feature-title">{f.title}</h3>
-              <p className="feature-desc">{f.desc}</p>
+            <div key={i} className="carousel-card">
+              <div className="carousel-icon">{f.icon}</div>
+              <h3 className="carousel-title">{f.title}</h3>
+              <p className="carousel-desc">{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="landing-bottom-cta">
-        <h2 className="landing-bottom-title">
-          Ready to see inside<br />
-          <span style={{ color: 'var(--accent-red)' }}>the black box?</span>
-        </h2>
-        <button className="landing-cta landing-cta-outline" onClick={() => navigate('/dashboard')}>
-          <span>LAUNCH MONITOR</span>
-          <span className="cta-arrow">→</span>
-        </button>
+      {/* Circular Stats Layout (Ref Image Layout) */}
+      <section className="circular-stats-section">
+        <div className="stats-left">
+           <div className="dial-circle">
+               {Array.from({ length: 40 }).map((_, i) => (
+                   <div key={i} className="dial-tick" style={{ transform: `rotate(${i * 9}deg)` }} />
+               ))}
+               <div className="dial-center">
+                   <div style={{ fontSize: '3.5rem', fontWeight: 900, lineHeight: 1 }}>500M</div>
+                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '0.5rem' }}>Parameters<br/>Monitored</div>
+               </div>
+           </div>
+        </div>
+        <div className="stats-right">
+           <div className="stat-card">
+              <div className="stat-card-val" style={{ color: 'var(--accent-red)' }}>3</div>
+              <div className="stat-card-label">Uncertainty<br/>Signals Extracted</div>
+           </div>
+           <div className="stat-card">
+              <div className="stat-card-val" style={{ color: 'var(--accent-green)' }}>~0ms</div>
+              <div className="stat-card-label">Streaming<br/>Latency (SSE)</div>
+           </div>
+           <div className="stat-card">
+              <div className="stat-card-val" style={{ color: '#fff' }}>600+</div>
+              <div className="stat-card-label">Math operations<br/>Per Token</div>
+           </div>
+        </div>
       </section>
 
       {/* Footer */}
@@ -240,5 +285,6 @@ export default function LandingPage() {
         <span style={{ color: 'var(--accent-red)' }}>Hallucination Monitor</span>
       </footer>
     </div>
+    </>
   );
 }

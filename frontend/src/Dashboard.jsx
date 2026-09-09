@@ -1,23 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Zap, Shield, Activity } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ArrowLeft, Zap, ShieldAlert, Cpu, Globe, CheckCircle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import './index.css';
 
 const API = 'http://localhost:8000';
 
-// Token rendering for standard mode
 function StandardToken({ token }) {
   if (token.is_flagged) {
     return (
       <span
-        title={`Risk: ${Math.round(token.lie_score * 100)}%`}
+        title={`Risk: ${Math.round(token.lie_score * 100)}% | Diagnosis: ${token.diagnosis}`}
         style={{
           background: 'rgba(255,51,51,0.18)',
           borderBottom: '2px solid #ff3333',
           color: '#ff9999',
           padding: '0 1px',
-          cursor: 'default',
+          cursor: 'help',
         }}
       >
         {token.token}
@@ -27,196 +26,53 @@ function StandardToken({ token }) {
   return <span style={{ color: '#e0e0e0' }}>{token.token}</span>;
 }
 
-// Token rendering for UGD mode
-function UGDToken({ token }) {
-  if (token.status === 'accepted') {
-    return <span style={{ color: '#e0e0e0' }}>{token.token}</span>;
-  }
-
-  if (token.status === 'warned') {
-    return (
-      <span
-        title={`Risky token: ${token.diagnosis || 'High Hallucination Risk'} (${Math.round(token.risk_score * 100)}%)`}
-        style={{
-          background: 'rgba(255,149,0,0.15)',
-          borderBottom: '2px solid #ff9500',
-          color: '#ffb830',
-          padding: '0 1px',
-          cursor: 'help',
-        }}
-      >
-        {token.token}
-      </span>
-    );
-  }
-
-  if (token.status === 'retracted') {
-    return (
-      <span 
-        title={`Retracted due to: ${token.diagnosis || 'High Hallucination Risk'} (${Math.round(token.risk_score * 100)}%)`}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
-          background: 'rgba(255,51,51,0.12)', border: '1px solid #ff3333',
-          color: '#ff3333', padding: '0.2rem 0.75rem', borderRadius: '2px',
-          fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em',
-          marginLeft: '4px', cursor: 'help'
-        }}
-      >
-        🛑 STOPPED — model was about to say "<em style={{ fontStyle: 'italic', fontWeight: 400 }}>{token.original_token}</em>"
-      </span>
-    );
-  }
-
-  if (token.status === 'grounded') {
-    return (
-      <span
-        title="Self-Healed: Token generated using verified Wikipedia context"
-        style={{
-          color: '#33ccff',
-          textShadow: '0 0 8px rgba(51, 204, 255, 0.4)',
-        }}
-      >
-        {token.token}
-      </span>
-    );
-  }
-
-  return <span>{token.token}</span>;
-}
-
-function Panel({ title, icon, accentColor, tokens, isGenerating, isRagSearching, mode, stats, retracted, correctedCount, loadingMsg }) {
-  const isUGD = mode === 'ugd';
-  return (
-    <div style={{
-      flex: 1,
-      border: `1px solid ${accentColor}44`,
-      background: '#111',
-      display: 'flex',
-      flexDirection: 'column',
-      minHeight: 0,
-    }}>
-      {/* Panel Header */}
-      <div style={{
-        padding: '1rem 1.5rem',
-        borderBottom: `1px solid ${accentColor}44`,
-        background: `${accentColor}08`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '0.75rem',
-        flexShrink: 0,
-      }}>
-        <span style={{ color: accentColor, display: 'flex' }}>{icon}</span>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff' }}>
-            {title}
-          </div>
-          <div style={{ fontSize: '0.65rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
-            {isUGD ? 'Token gating active — accept / correct / retract' : 'Standard greedy decoding — no safety gating'}
-          </div>
-        </div>
-        {retracted && (
-          <span style={{ marginLeft: 'auto', fontSize: '0.7rem', fontWeight: 900, color: '#ff3333', letterSpacing: '0.1em' }}>
-            STOPPED EARLY
-          </span>
-        )}
-      </div>
-
-      {/* Output */}
-      <div style={{
-        flex: 1, overflowY: 'auto', padding: '1.5rem',
-        fontSize: '1rem', lineHeight: 1.9, minHeight: 180,
-      }}>
-        {tokens.length === 0 && !isGenerating && !isRagSearching && (
-          <p style={{ color: '#444', margin: 0, fontStyle: 'italic', fontSize: '0.9rem' }}>
-            Output will appear here once you run the analysis...
-          </p>
-        )}
-        {tokens.length === 0 && isGenerating && !isRagSearching && (
-          <p style={{ color: '#555', margin: 0, fontSize: '0.85rem', animation: 'pulse 1.2s infinite', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
-            {loadingMsg}
-          </p>
-        )}
-        <p style={{ margin: 0 }}>
-          {tokens.map((t, i) =>
-            isUGD
-              ? <UGDToken key={i} token={t} />
-              : <StandardToken key={i} token={t} />
-          )}
-          {isGenerating && tokens.length > 0 && !isRagSearching && <span style={{ opacity: 0.4, animation: 'pulse 1s infinite' }}>▌</span>}
-        </p>
-        
-        {/* RAG Searching UI */}
-        {isRagSearching && (
-          <div style={{
-            marginTop: '1rem', padding: '0.75rem', background: 'rgba(51, 204, 255, 0.1)',
-            borderLeft: '2px solid #33ccff', color: '#33ccff', fontSize: '0.85rem',
-            animation: 'pulse 1.2s infinite', display: 'flex', alignItems: 'center', gap: '0.5rem'
-          }}>
-            🔍 <b>Self-Healing:</b> Searching Wikipedia for ground truth...
-          </div>
-        )}
-      </div>
-
-      {/* Stats Footer */}
-      {stats && (
-        <div style={{
-          borderTop: `1px solid ${accentColor}33`,
-          padding: '0.75rem 1.5rem',
-          display: 'flex', gap: '1.5rem', flexShrink: 0,
-          background: '#0d0d0d',
-        }}>
-          {Object.entries(stats).map(([k, v]) => (
-            <div key={k}>
-              <div style={{ fontSize: '0.6rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>{k}</div>
-              <div style={{ fontSize: '1rem', fontWeight: 900, color: accentColor }}>{v}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const [prompt, setPrompt] = useState('');
-
-  const [stdTokens, setStdTokens]       = useState([]);
-  const [ugdTokens, setUgdTokens]       = useState([]);
-  const [stdGenerating, setStdGenerating] = useState(false);
-  const [ugdGenerating, setUgdGenerating] = useState(false);
-  const [stdStats, setStdStats]         = useState(null);
-  const [ugdStats, setUgdStats]         = useState(null);
-  const [ugdRetracted, setUgdRetracted] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isRagSearching, setIsRagSearching] = useState(false);
-  const [correctedCount, setCorrectedCount] = useState(0);
-
-  // Live Chart Data
+  const [ragResult, setRagResult] = useState(null);
+  const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
+  const [flaggedTokensList, setFlaggedTokensList] = useState([]);
+
+  // 3D Tilt State
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+      const { innerWidth, innerHeight } = window;
+      const x = (e.clientX / innerWidth - 0.5) * 10; // Max tilt 5deg
+      const y = (e.clientY / innerHeight - 0.5) * -10;
+      setTilt({ x: y, y: x });
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   const handleRun = async () => {
     if (!prompt.trim()) return;
-    setStdTokens([]);
-    setUgdTokens([]);
-    setStdStats(null);
-    setUgdStats(null);
-    setUgdRetracted(false);
-    setIsRagSearching(false);
-    setCorrectedCount(0);
+    setTokens([]);
+    setStats(null);
+    setRagResult(null);
+    setFlaggedTokensList([]);
     setChartData([]);
-    setStdGenerating(true);
-    setUgdGenerating(true);
+    setIsGenerating(true);
+    setIsRagSearching(false);
 
-    // Run both streams in parallel
-    const runStandard = async () => {
+    try {
       const res = await fetch(`${API}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 40 }),
+        body: JSON.stringify({ prompt, max_tokens: 60 }),
       });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let allRisk = [], allEntropy = [], allGrad = [], totalFlagged = 0;
+      let allRisk = [], allEntropy = [], totalFlagged = 0;
+      let localFlaggedList = [];
       let tokenIndex = 0;
 
       while (true) {
@@ -225,227 +81,263 @@ export default function Dashboard() {
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop();
+        
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
             const data = JSON.parse(line.slice(6));
             if (data.event === 'token') {
-              setStdTokens(prev => [...prev, data]);
+              setTokens(prev => [...prev, data]);
               allRisk.push(data.lie_score);
               allEntropy.push(data.entropy);
-              allGrad.push(data.gradient_norm);
-              if (data.is_flagged) totalFlagged++;
+              
+              if (data.is_flagged) {
+                totalFlagged++;
+                localFlaggedList.push(data);
+              }
 
               const currentRisk = data.lie_score * 100;
               setChartData(prev => {
                 const newData = [...prev];
-                if (!newData[tokenIndex]) newData[tokenIndex] = { name: tokenIndex };
-                newData[tokenIndex].stdRisk = currentRisk;
-                return newData;
-              });
-              tokenIndex++;
-            }
-          } catch (_) {}
-        }
-      }
-      setStdGenerating(false);
-      if (allRisk.length) {
-        const avg = arr => (arr.reduce((a, b) => a + b, 0) / arr.length);
-        setStdStats({
-          'Hallucination Risk': `${Math.round(avg(allRisk) * 100)}%`,
-          'Avg Entropy':        `${Math.round(avg(allEntropy) * 100)}%`,
-          'Flagged Tokens':     `${totalFlagged}`,
-        });
-      }
-    };
-
-    const runUGD = async () => {
-      const res = await fetch(`${API}/generate/ugd`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 40 }),
-      });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let allRisk = [], allEntropy = [], allGrad = [], corrected = 0, wasRetracted = false;
-      let tokenIndex = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.event === 'token') {
-              setUgdTokens(prev => [...prev, data]);
-              allRisk.push(data.risk_score);
-              allEntropy.push(data.entropy);
-              allGrad.push(data.gradient_norm);
-              if (data.status === 'corrected') corrected++;
-              if (data.status === 'retracted') {
-                wasRetracted = true;
-                setUgdRetracted(true);
-              }
-              
-              const currentRisk = data.risk_score * 100;
-              setChartData(prev => {
-                const newData = [...prev];
-                if (!newData[tokenIndex]) newData[tokenIndex] = { name: tokenIndex };
-                newData[tokenIndex].ugdRisk = currentRisk;
+                newData[tokenIndex] = { ...newData[tokenIndex], name: tokenIndex, Risk: currentRisk };
                 return newData;
               });
               tokenIndex++;
 
             } else if (data.event === 'rag_search_start') {
               setIsRagSearching(true);
+              if (allRisk.length) {
+                const avg = arr => (arr.reduce((a, b) => a + b, 0) / arr.length);
+                setStats({
+                  'Hallucination Risk': `${Math.round(avg(allRisk) * 100)}%`,
+                  'Avg Entropy':        `${Math.round(avg(allEntropy) * 100)}%`,
+                  'Flagged Tokens':     `${totalFlagged}`,
+                });
+                setFlaggedTokensList(localFlaggedList);
+              }
             } else if (data.event === 'rag_search_result') {
               setIsRagSearching(false);
-            } else if (data.event === 'end') {
-              setCorrectedCount(data.corrected_count || corrected);
+              setRagResult(data.result);
             }
           } catch (_) {}
         }
       }
-      setUgdGenerating(false);
-      if (allRisk.length) {
-        const avg = arr => (arr.reduce((a, b) => a + b, 0) / arr.length);
-        setUgdStats({
-          'Hallucination Risk': `${Math.round(avg(allRisk) * 100)}%`,
-          'Avg Entropy':        `${Math.round(avg(allEntropy) * 100)}%`,
-          'Tokens Corrected':   `${corrected}`,
-          'Retracted':          wasRetracted ? 'YES' : 'NO',
-        });
-      }
-    };
-
-    // Fire both simultaneously
-    runStandard();
-    runUGD();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+      setIsRagSearching(false);
+    }
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
-      {/* Top Nav */}
+    <>
+      <div className="deep-space-bg"><div className="stars"></div></div>
+      
+      {/* Premium Header - outside the 3D scene to keep it usable */}
       <nav style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '1rem 2rem', borderBottom: '1px solid #1e1e1e', flexShrink: 0,
+        padding: '1.5rem 3rem', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0,
+        background: 'rgba(5, 10, 16, 0.6)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 100
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Activity size={18} color="#fff" />
-            <span style={{ fontWeight: 900, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#fff' }}>HALLUCI<br/>NATION</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <Link to="/" style={{ color: 'var(--text-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '1rem' }}>
+              <ArrowLeft size={18} />
+            </Link>
+            <div style={{ width: '2px', height: '24px', background: 'var(--border-color)' }} />
+            <div>
+              <div style={{ fontWeight: 900, fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#fff', lineHeight: 1.2 }}>
+                HALLUCI<span style={{ color: 'var(--accent-red)' }}>NATION</span>
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700 }}>
+                Forensic Analysis Dashboard
+              </div>
+            </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontWeight: 900, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#fff' }}>UGD DASHBOARD</div>
-          <div style={{ fontSize: '0.6rem', color: '#555', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700 }}>
-            Live Evaluation & Charting
-          </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <Link to="/history" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color = '#fff'} onMouseLeave={e => e.target.style.color = 'var(--text-secondary)'}>
+            View History
+          </Link>
+          <Link to="/architecture" className="landing-cta" style={{ padding: '0.6rem 1.2rem', fontSize: '0.8rem', borderRadius: '4px', textDecoration: 'none', boxShadow: '0 0 15px rgba(51,204,255,0.2)' }}>
+            <Cpu size={14} /> 3D Architecture
+          </Link>
         </div>
-        <Link to="/history" style={{ color: '#555', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          History →
-        </Link>
       </nav>
 
-      {/* Legend */}
-      <div style={{ padding: '0.6rem 2rem', borderBottom: '1px solid #1a1a1a', display: 'flex', gap: '2rem', flexShrink: 0, background: '#0d0d0d' }}>
-        <span style={{ fontSize: '0.7rem', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>UGD Token Legend:</span>
-        <span style={{ fontSize: '0.7rem', color: '#e0e0e0', fontWeight: 600 }}>⬜ Accepted (safe)</span>
-        <span style={{ fontSize: '0.7rem', color: '#ffb830', fontWeight: 600 }}>🟠 Warned (risky — hover for score)</span>
-        <span style={{ fontSize: '0.7rem', color: '#ff3333', fontWeight: 600 }}>🛑 Retracted (generation stopped)</span>
-        <span style={{ fontSize: '0.7rem', color: '#33ccff', fontWeight: 600 }}>🔵 Self-Healed (Auto-RAG)</span>
-        <span style={{ fontSize: '0.7rem', color: '#ff9999', fontWeight: 600, marginLeft: 'auto' }}>Standard: <span style={{ borderBottom: '2px solid #ff3333' }}>underline = flagged</span></span>
-      </div>
+      <div className="dashboard-3d-wrapper" ref={containerRef} style={{ minHeight: 'calc(100vh - 80px)' }}>
+        <div className="dashboard-3d-scene" style={{ 
+          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          padding: '2rem 3rem', display: 'flex', flexDirection: 'column', gap: '2rem', maxWidth: '1400px', margin: '0 auto', width: '100%',
+          position: 'relative'
+        }}>
+          
+          {/* SVG Neural Sync Lines */}
+          <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }}>
+            {/* Input to Chart to Output */}
+            <path d="M 900 150 C 700 150, 700 150, 600 150" fill="none" stroke="rgba(51,204,255,0.2)" strokeWidth="2" strokeDasharray="5,5" />
+            <path d="M 900 350 C 700 350, 700 350, 600 350" fill="none" stroke="rgba(255,51,51,0.2)" strokeWidth="2" strokeDasharray="5,5" />
+            {/* Output to Forensics and Ground Truth */}
+            {(stats || isRagSearching) && (
+              <>
+                <path d="M 400 450 C 400 550, 300 550, 300 600" fill="none" stroke="rgba(255,51,51,0.4)" strokeWidth="2" />
+                <circle cx="300" cy="600" r="4" fill="#ff3333" />
+                <path d="M 500 450 C 500 550, 900 550, 900 600" fill="none" stroke="rgba(51,204,255,0.4)" strokeWidth="2" />
+                <circle cx="900" cy="600" r="4" fill="#33ccff" />
+              </>
+            )}
+          </svg>
 
-      {/* Panels Area */}
-      <div style={{ flex: '1 1 50%', display: 'flex', gap: '1px', padding: '0', background: '#1a1a1a', overflow: 'hidden' }}>
-        <Panel
-          title="Standard Decoding"
-          icon={<Zap size={18} />}
-          accentColor="#ff3333"
-          tokens={stdTokens}
-          isGenerating={stdGenerating}
-          mode="standard"
-          stats={stdStats}
-          retracted={false}
-          correctedCount={0}
-          loadingMsg="Generating without safety gating..."
-        />
-        <Panel
-          title="UGD — Uncertainty-Gated Decoding"
-          icon={<Shield size={18} />}
-          accentColor="#30d158"
-          tokens={ugdTokens}
-          isGenerating={ugdGenerating}
-          isRagSearching={isRagSearching}
-          mode="ugd"
-          stats={ugdStats}
-          retracted={ugdRetracted}
-          correctedCount={correctedCount}
-          loadingMsg="UGD active — analyzing each token before emitting..."
-        />
-      </div>
+          <div style={{ display: 'flex', gap: '3rem', position: 'relative', zIndex: 1 }}>
+            {/* Main Output Panel */}
+            <div className="glass-panel-dark" style={{
+              flex: '1 1 60%', border: `1px solid rgba(51,204,255,0.3)`, display: 'flex', flexDirection: 'column', position: 'relative',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 0 20px rgba(51,204,255,0.05)'
+            }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '2px', background: '#33ccff', boxShadow: `0 0 15px #33ccff` }} />
+              <div style={{
+                padding: '1.5rem', borderBottom: `1px solid rgba(51,204,255,0.1)`, background: `linear-gradient(180deg, rgba(51,204,255,0.05) 0%, transparent 100%)`,
+                display: 'flex', alignItems: 'center', gap: '1rem'
+              }}>
+                <div style={{ width: 36, height: 36, borderRadius: '8px', background: `rgba(51,204,255,0.1)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#33ccff' }}>
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: '1rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Model Generation Output</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600, marginTop: '0.25rem' }}>
+                    Standard decoding — Live token tracking
+                  </div>
+                </div>
+              </div>
 
-      {/* Live Chart Area */}
-      <div style={{ flex: '1 1 35%', minHeight: '200px', padding: '1rem 2rem', background: '#0a0a0a', borderTop: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontSize: '0.7rem', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
-          Live Risk Tracking (Token by Token)
-        </div>
-        <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                <XAxis dataKey="name" stroke="#555" tick={{fontSize: 10}} />
-                <YAxis stroke="#555" tick={{fontSize: 10}} domain={[0, 100]} />
-                <RechartsTooltip 
-                    contentStyle={{ backgroundColor: '#111', border: '1px solid #333', fontSize: '0.8rem' }}
-                    itemStyle={{ color: '#fff' }}
+              <div style={{ padding: '2rem', fontSize: '1.1rem', lineHeight: 2, minHeight: '300px' }}>
+                {tokens.length === 0 && !isGenerating && (
+                  <div style={{ color: '#555', fontStyle: 'italic', fontSize: '0.9rem', textAlign: 'center', marginTop: '4rem' }}>
+                    Enter a prompt to initiate neural generation...
+                  </div>
+                )}
+                <p style={{ margin: 0, fontFamily: 'Georgia, serif' }}>
+                  {tokens.map((t, i) => <StandardToken key={i} token={t} />)}
+                  {isGenerating && tokens.length > 0 && <span style={{ opacity: 0.4, animation: 'pulse 1s infinite' }}>▌</span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Input & Chart Panel */}
+            <div style={{ flex: '0 0 350px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              {/* Input */}
+              <div className="glass-panel-dark" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Prompt Target
+                </div>
+                <textarea
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && !isGenerating && (e.preventDefault(), handleRun())}
+                  placeholder="Ask a factual question..."
+                  disabled={isGenerating}
+                  style={{
+                    width: '100%', height: '80px', background: 'transparent', border: 'none',
+                    color: '#fff', fontSize: '1rem', fontFamily: 'Inter, sans-serif', outline: 'none', resize: 'none', padding: 0
+                  }}
                 />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '0.8rem' }} />
-                <Line type="monotone" dataKey="stdRisk" name="Standard Risk %" stroke="#ff3333" strokeWidth={2} dot={false} isAnimationActive={false} />
-                <Line type="monotone" dataKey="ugdRisk" name="UGD Risk %" stroke="#30d158" strokeWidth={2} dot={false} isAnimationActive={false} />
-              </LineChart>
-            </ResponsiveContainer>
+                <button
+                  className="landing-cta"
+                  onClick={handleRun}
+                  disabled={isGenerating || !prompt.trim()}
+                  style={{ width: '100%', justifyContent: 'center', opacity: (isGenerating || !prompt.trim()) ? 0.5 : 1, padding: '1rem' }}
+                >
+                  <span>{isGenerating ? 'GENERATING...' : 'ANALYZE'}</span>
+                </button>
+              </div>
+
+              {/* Chart */}
+              <div className="glass-panel-dark" style={{ flex: 1, padding: '1.5rem', display: 'flex', flexDirection: 'column', minHeight: '200px', border: '1px solid rgba(255,51,51,0.2)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>
+                  Live Risk Chart
+                </div>
+                <div style={{ flex: 1, width: '100%' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <YAxis stroke="#555" tick={{fontSize: 10}} domain={[0, 100]} tickLine={false} axisLine={false} hide />
+                        <RechartsTooltip 
+                            contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid #333', fontSize: '0.8rem', borderRadius: '4px' }}
+                            itemStyle={{ color: '#fff' }}
+                        />
+                        <Line type="stepAfter" dataKey="Risk" stroke="#ff3333" strokeWidth={2} dot={false} isAnimationActive={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Post-Generation Analysis section */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', transition: 'opacity 0.5s, transform 0.5s', opacity: (stats || isRagSearching) ? 1 : 0, transform: (stats || isRagSearching) ? 'translateY(0)' : 'translateY(20px)', position: 'relative', zIndex: 1 }}>
+            
+            {/* Hallucination Forensics */}
+            <div className="glass-panel-dark" style={{ border: '1px solid rgba(255,51,51,0.3)', position: 'relative', boxShadow: '0 15px 30px rgba(255,51,51,0.1)' }}>
+               <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '2px', background: '#ff3333', boxShadow: `0 0 15px #ff3333` }} />
+               <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,51,51,0.1)', display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,51,51,0.05)' }}>
+                  <ShieldAlert size={20} color="#ff3333" />
+                  <div style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Hallucination Forensics</div>
+               </div>
+               <div style={{ padding: '1.5rem' }}>
+                 {isGenerating && !stats ? (
+                   <div style={{ color: '#555', fontStyle: 'italic', fontSize: '0.9rem' }}>Awaiting generation completion...</div>
+                 ) : flaggedTokensList.length > 0 ? (
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                     <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                       The Mechanistic Interpretability Engine detected high uncertainty in the following tokens:
+                     </div>
+                     {flaggedTokensList.map((t, idx) => (
+                       <div key={idx} style={{ background: 'rgba(255,51,51,0.05)', borderLeft: '3px solid #ff3333', padding: '0.75rem', borderRadius: '0 4px 4px 0' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                           <span style={{ fontWeight: 700, color: '#ff9999' }}>"{t.token}"</span>
+                           <span style={{ fontSize: '0.75rem', color: '#ff3333', fontWeight: 900 }}>{Math.round(t.lie_score * 100)}% RISK</span>
+                         </div>
+                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                           <strong>Layer:</strong> Embedding Layer (Inferred)<br/>
+                           <strong>Diagnosis:</strong> {t.diagnosis}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 ) : (
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#30d158' }}>
+                     <CheckCircle size={18} />
+                     <span>No significant hallucinations detected.</span>
+                   </div>
+                 )}
+               </div>
+            </div>
+
+            {/* Ground Truth RAG */}
+            <div className="glass-panel-dark" style={{ border: '1px solid rgba(51,204,255,0.3)', position: 'relative', boxShadow: '0 15px 30px rgba(51,204,255,0.1)' }}>
+               <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '2px', background: '#33ccff', boxShadow: `0 0 15px #33ccff` }} />
+               <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(51,204,255,0.1)', display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(51,204,255,0.05)' }}>
+                  <Globe size={20} color="#33ccff" />
+                  <div style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ground Truth Context</div>
+               </div>
+               <div style={{ padding: '1.5rem', lineHeight: 1.6 }}>
+                  {isRagSearching ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#33ccff', animation: 'pulse 1.5s infinite' }}>
+                      <Globe size={16} /> Searching live internet for verified facts...
+                    </div>
+                  ) : ragResult ? (
+                    <div style={{ fontSize: '0.95rem', color: '#e0e0e0' }}>
+                      {ragResult}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#555', fontStyle: 'italic', fontSize: '0.9rem' }}>Awaiting search execution...</div>
+                  )}
+               </div>
+            </div>
+
+          </div>
         </div>
       </div>
-
-      {/* Input Bar */}
-      <div style={{
-        padding: '1rem 2rem', borderTop: '1px solid #1a1a1a',
-        display: 'flex', gap: '1rem', flexShrink: 0, background: '#0d0d0d',
-      }}>
-        <input
-          type="text"
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !stdGenerating && !ugdGenerating && handleRun()}
-          placeholder='Try a hallucination-prone prompt e.g. "When was World War 3 fought?" or "Prove 4 > 5"'
-          disabled={stdGenerating || ugdGenerating}
-          style={{
-            flex: 1, background: '#111', border: '1px solid #2a2a2a',
-            color: '#fff', padding: '0.8rem 1rem', fontSize: '0.9rem',
-            fontFamily: 'Inter, sans-serif', outline: 'none',
-          }}
-        />
-        <button
-          onClick={handleRun}
-          disabled={stdGenerating || ugdGenerating || !prompt.trim()}
-          style={{
-            background: (stdGenerating || ugdGenerating) ? '#1a1a1a' : '#30d158',
-            color: (stdGenerating || ugdGenerating) ? '#555' : '#000',
-            border: 'none', padding: '0.8rem 2rem',
-            fontFamily: 'Inter, sans-serif', fontWeight: 900, fontSize: '0.85rem',
-            textTransform: 'uppercase', letterSpacing: '0.1em',
-            cursor: (stdGenerating || ugdGenerating) ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          {stdGenerating || ugdGenerating ? 'RUNNING...' : 'RUN BOTH'}
-        </button>
-      </div>
-    </div>
+    </>
   );
 }

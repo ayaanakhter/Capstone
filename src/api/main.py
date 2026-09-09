@@ -2,6 +2,7 @@ import sys
 import os
 import asyncio
 import wikipedia
+from duckduckgo_search import DDGS
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -59,8 +60,10 @@ async def generate_stream(req: GenerateRequest, db: DBSession = Depends(get_db))
 
     print(f"Streaming generation for prompt: '{req.prompt}'")
 
+    strict_prompt = f"{req.prompt}\n(Answer precisely and keep it brief, no long paragraphs.)"
+
     token_generator = model.generate_stream(
-        req.prompt,
+        strict_prompt,
         max_new_tokens=req.max_tokens,
         compute_grads=True,
         mc_dropout_passes=2
@@ -87,7 +90,7 @@ async def generate_stream(req: GenerateRequest, db: DBSession = Depends(get_db))
             x = 5.0 * (lie_product - 0.3)
             lie_score = float(1 / (1 + np.exp(-x)))
 
-            is_flagged = lie_score > 0.5
+            is_flagged = lie_score > 0.40
             if is_flagged:
                 flagged_count += 1
 
@@ -109,6 +112,7 @@ async def generate_stream(req: GenerateRequest, db: DBSession = Depends(get_db))
                 "lie_score":         lie_score,
                 "is_flagged":        bool(is_flagged),
                 "overall_lie_score": float(mean_lie),
+                "diagnosis":         sig.diagnosis,
             }
             yield f"data: {json.dumps(payload)}\n\n"
             await asyncio.sleep(0.01)
@@ -132,6 +136,27 @@ async def generate_stream(req: GenerateRequest, db: DBSession = Depends(get_db))
             except Exception as e:
                 print(f"DB save failed: {e}")
 
+        # ── Post-Generation Web Search (Ground Truth) ────────────────────────
+        yield f"data: {json.dumps({'event': 'rag_search_start'})}\n\n"
+        
+        def do_web_search():
+            try:
+                from duckduckgo_search import DDGS
+                results = DDGS().text(req.prompt, max_results=2)
+                if results:
+                    return " ".join([r['body'] for r in results])
+            except Exception:
+                pass
+            return f"Could not find ground truth for '{req.prompt}'."
+
+        try:
+            loop = asyncio.get_event_loop()
+            search_result = await loop.run_in_executor(None, do_web_search)
+        except Exception:
+            search_result = f"Could not find ground truth for '{req.prompt}'."
+
+        yield f"data: {json.dumps({'event': 'rag_search_result', 'result': search_result})}\n\n"
+
         yield f"data: {json.dumps({'event': 'end', 'full_text': full_text})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -149,12 +174,14 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
 
     print(f"[UGD] Streaming for prompt: '{req.prompt}'")
 
+    strict_prompt = f"{req.prompt}\n(Answer precisely and keep it brief, no long paragraphs.)"
+
     ugd_generator = model.generate_stream_ugd(
-        req.prompt,
+        strict_prompt,
         max_new_tokens=req.max_tokens,
         mc_dropout_passes=2,
-        warn_threshold=0.35,
-        retract_threshold=0.52,
+        warn_threshold=0.30,
+        retract_threshold=0.40,
     )
 
     async def event_generator():
@@ -214,21 +241,30 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
         if retracted:
             yield f"data: {json.dumps({'event': 'rag_search_start', 'query': req.prompt})}\n\n"
             
-            # Offload blocking Wikipedia call to thread
+            # Offload blocking DDG call to thread
+            def do_web_search():
+                try:
+                    results = DDGS().text(req.prompt, max_results=2)
+                    if results:
+                        return " ".join([r['body'] for r in results])
+                except Exception:
+                    pass
+                return f"Could not find information for '{req.prompt}'."
+
             try:
                 loop = asyncio.get_event_loop()
-                search_result = await loop.run_in_executor(None, lambda: wikipedia.summary(req.prompt, sentences=2))
+                search_result = await loop.run_in_executor(None, do_web_search)
             except Exception as e:
                 search_result = f"Could not find information for '{req.prompt}'."
 
             yield f"data: {json.dumps({'event': 'rag_search_result', 'result': search_result})}\n\n"
             
             # Restart generation with grounded context
-            rag_prompt = f"Background context: {search_result}\n\nQuestion: {req.prompt}"
+            rag_prompt = f"Background context: {search_result}\n\nQuestion: {req.prompt}\n(Answer precisely and keep it brief, no long paragraphs.)"
             print(f"[UGD] RAG Fallback starting for: {req.prompt}")
             
             # We use standard generate_stream with NO uncertainty math (compute_grads=False, mc_dropout_passes=0)
-            # This makes it super fast and low RAM, since we trust the Wikipedia context.
+            # This makes it super fast and low RAM, since we trust the Internet context.
             rag_generator = model.generate_stream(
                 rag_prompt,
                 max_new_tokens=req.max_tokens,
