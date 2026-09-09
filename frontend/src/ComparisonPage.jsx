@@ -31,27 +31,19 @@ function UGDToken({ token }) {
     return <span style={{ color: '#e0e0e0' }}>{token.token}</span>;
   }
 
-  if (token.status === 'corrected') {
+  if (token.status === 'warned') {
     return (
-      <span title={`Corrected from "${token.original_token}" (was ${Math.round(token.risk_score * 100)}% risky → now ${Math.round(token.corrected_risk * 100)}%)`}>
-        <span style={{
-          textDecoration: 'line-through',
-          color: '#ff6666',
-          fontSize: '0.85em',
-          marginRight: '2px',
-          opacity: 0.7,
-        }}>
-          {token.original_token}
-        </span>
-        <span style={{
-          background: 'rgba(48,209,88,0.15)',
-          borderBottom: '2px solid #30d158',
-          color: '#30d158',
-          padding: '0 2px',
-          fontWeight: 700,
-        }}>
-          {token.token}
-        </span>
+      <span
+        title={`Risky token — ${Math.round(token.risk_score * 100)}% hallucination risk`}
+        style={{
+          background: 'rgba(255,149,0,0.15)',
+          borderBottom: '2px solid #ff9500',
+          color: '#ffb830',
+          padding: '0 1px',
+          cursor: 'default',
+        }}
+      >
+        {token.token}
       </span>
     );
   }
@@ -59,16 +51,13 @@ function UGDToken({ token }) {
   if (token.status === 'retracted') {
     return (
       <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+        display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
         background: 'rgba(255,51,51,0.12)', border: '1px solid #ff3333',
-        color: '#ff3333', padding: '0.1rem 0.5rem', borderRadius: '2px',
+        color: '#ff3333', padding: '0.2rem 0.75rem', borderRadius: '2px',
         fontSize: '0.8rem', fontWeight: 900, letterSpacing: '0.05em',
         marginLeft: '4px',
       }}>
-        🛑 GENERATION STOPPED — HIGH HALLUCINATION RISK
-        <span style={{ fontWeight: 400, fontSize: '0.7rem', opacity: 0.8 }}>
-          (would have said "{token.original_token}")
-        </span>
+        🛑 STOPPED — model was about to say "<em style={{ fontStyle: 'italic', fontWeight: 400 }}>{token.original_token}</em>"
       </span>
     );
   }
@@ -310,10 +299,10 @@ export default function ComparisonPage() {
       {/* Legend */}
       <div style={{ padding: '0.6rem 2rem', borderBottom: '1px solid #1a1a1a', display: 'flex', gap: '2rem', flexShrink: 0, background: '#0d0d0d' }}>
         <span style={{ fontSize: '0.7rem', color: '#555', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>UGD Token Legend:</span>
-        <span style={{ fontSize: '0.7rem', color: '#e0e0e0', fontWeight: 600 }}>⬜ Accepted</span>
-        <span style={{ fontSize: '0.7rem', color: '#30d158', fontWeight: 600 }}>🟢 Corrected (safer replacement chosen)</span>
+        <span style={{ fontSize: '0.7rem', color: '#e0e0e0', fontWeight: 600 }}>⬜ Accepted (safe)</span>
+        <span style={{ fontSize: '0.7rem', color: '#ffb830', fontWeight: 600 }}>🟠 Warned (risky — hover for score)</span>
         <span style={{ fontSize: '0.7rem', color: '#ff3333', fontWeight: 600 }}>🛑 Retracted (generation stopped)</span>
-        <span style={{ fontSize: '0.7rem', color: '#ff9999', fontWeight: 600, marginLeft: 'auto' }}>Standard: <span style={{ borderBottom: '2px solid #ff3333' }}>underline = flagged token</span></span>
+        <span style={{ fontSize: '0.7rem', color: '#ff9999', fontWeight: 600, marginLeft: 'auto' }}>Standard: <span style={{ borderBottom: '2px solid #ff3333' }}>underline = flagged</span></span>
       </div>
 
       {/* Panels */}
