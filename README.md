@@ -1,6 +1,6 @@
-# 🕵️‍♂️ The Lie Detector
+# 🕵️‍♂️ Hallucination Monitor
 
-**The Lie Detector** is a Mechanistic Interpretability dashboard designed to catch Large Language Models (LLMs) hallucinating in real-time. 
+**The Hallucination Monitor** is a Mechanistic Interpretability dashboard designed to catch Large Language Models (LLMs) hallucinating in real-time. 
 
 Instead of treating the AI like a "black box," this project hooks deep into the PyTorch tensor math of the model as it thinks. It monitors three core signals:
 1. **Softmax Entropy:** Measures how spread out the model's confidence is across the dictionary.
@@ -13,7 +13,7 @@ It features a high-performance **True Real-Time Streaming** backend and a 3D arc
 
 ## 🚀 How to Replicate This Project Locally
 
-Follow this friendly guide to get the Lie Detector running on your own machine!
+Follow this friendly guide to get the Hallucination Monitor running on your own machine!
 
 ### 1. Prerequisites
 You will need to have the following installed on your computer:
@@ -87,7 +87,7 @@ The frontend is built with React, Vite, and Three.js.
    ```
 
 ### 6. You're Done! 🎉
-Open your browser and navigate to `http://localhost:5173`. You should see the Brutalist Lie Detector dashboard. Type a prompt, and watch the signals extract in real time!
+Open your browser and navigate to `http://localhost:5173`. You should see the Brutalist Hallucination Monitor dashboard. Type a prompt, and watch the signals extract in real time!
 
 ---
 

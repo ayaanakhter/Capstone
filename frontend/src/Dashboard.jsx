@@ -119,7 +119,7 @@ export default function Dashboard() {
     <div className="app-container">
       {/* Left Main Content */}
       <div className="main-content">
-        <h1 className="title-massive">LIE<br/>DETECTOR</h1>
+        <h1 className="title-massive">HALLUCINATION<br/>MONITOR</h1>
         
         <div className="output-box">
           {tokens.length === 0 && !isGenerating ? (
@@ -168,11 +168,10 @@ export default function Dashboard() {
         </h2>
         
         <div style={{ flexGrow: 1 }}>
-          <StatBlock 
-            label="Lie Score" 
+          <Gauge 
             value={currentScore} 
-            max={1.0} 
-            format="percent" 
+            label="Hallucination Risk" 
+            color="var(--accent-red)" 
           />
           
           <StatBlock 
