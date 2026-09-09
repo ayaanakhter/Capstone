@@ -119,7 +119,7 @@ export default function Dashboard() {
     <div className="app-container">
       {/* Left Main Content */}
       <div className="main-content">
-        <h1 className="title-massive">HALLUCINATION<br/>MONITOR</h1>
+        <h1 className="title-massive">HALLUCI<br/>NATION<br/>MONITOR</h1>
         
         <div className="output-box">
           {tokens.length === 0 && !isGenerating ? (
