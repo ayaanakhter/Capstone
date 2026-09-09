@@ -1,0 +1,26 @@
+# Core
+torch>=2.2.0
+transformers>=4.40.0
+accelerate>=0.30.0
+
+# Signal computation
+scipy>=1.12.0
+
+# Evaluation datasets
+datasets>=2.19.0
+evaluate>=0.4.0
+
+# Backend (Phase 3)
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+websockets>=12.0
+pydantic>=2.7.0
+
+# Utilities
+numpy>=1.26.0
+tqdm>=4.66.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Testing
+pytest>=8.2.0

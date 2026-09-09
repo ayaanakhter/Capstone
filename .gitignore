@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Node
+frontend/node_modules/
+node_modules/
+dist/
+build/
+.env
+
+# Large Model Weights (DO NOT COMMIT)
+QWEN/
+GPT_2/
+*.safetensors
+*.bin
+*.pt
+*.h5
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+.pytest_cache/
