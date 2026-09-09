@@ -182,7 +182,7 @@ export default function ComparisonPage() {
       const res = await fetch(`${API}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 60 }),
+        body: JSON.stringify({ prompt, max_tokens: 40 }),
       });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -225,7 +225,7 @@ export default function ComparisonPage() {
       const res = await fetch(`${API}/generate/ugd`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 60 }),
+        body: JSON.stringify({ prompt, max_tokens: 40 }),
       });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();

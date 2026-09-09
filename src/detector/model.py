@@ -203,7 +203,7 @@ class LieDetectorModel:
     def _build_inputs(self, prompt: str) -> dict:
         if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template is not None:
             messages = [
-                {"role": "system", "content": "Answer in 1-3 sentences maximum. Be direct and to the point. No long explanations."},
+                {"role": "system", "content": "Reply in 1-2 short sentences only. Be extremely concise. No bullet points, no elaboration."},
                 {"role": "user",   "content": prompt},
             ]
             text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
