@@ -68,7 +68,7 @@ class LieDetectorModel:
     def generate_stream(
         self,
         prompt: str,
-        max_new_tokens: int = 50,
+        max_new_tokens: int = 40,
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 0.95,
@@ -76,7 +76,10 @@ class LieDetectorModel:
         mc_dropout_passes: int = 0,
     ):
         if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template is not None:
-            messages = [{"role": "user", "content": prompt}]
+            messages = [
+                {"role": "system", "content": "Answer in 1-3 sentences maximum. Be direct and to the point. No long explanations."},
+                {"role": "user", "content": prompt}
+            ]
             formatted_prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
             inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
         else:

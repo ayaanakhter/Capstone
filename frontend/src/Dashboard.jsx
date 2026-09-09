@@ -72,7 +72,7 @@ export default function Dashboard() {
       const response = await fetch("http://localhost:8000/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, max_tokens: 150 })
+        body: JSON.stringify({ prompt, max_tokens: 60 })
       });
 
       setHasGeneratedBefore(true);
