@@ -139,8 +139,8 @@ class LieDetectorModel:
         top_k: int = 50,
         top_p: float = 0.95,
         mc_dropout_passes: int = 2,
-        warn_threshold: float = 0.45,     # Highlight token orange but keep it
-        retract_threshold: float = 0.70,  # Stop generation entirely
+        warn_threshold: float = 0.35,     # Highlight token orange but keep it
+        retract_threshold: float = 0.52,  # Stop generation entirely
     ):
         """
         Uncertainty-Gated Decoding (UGD) — 3-tier system:

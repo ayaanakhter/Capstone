@@ -152,8 +152,8 @@ async def generate_ugd(req: GenerateRequest, db: DBSession = Depends(get_db)):
         req.prompt,
         max_new_tokens=req.max_tokens,
         mc_dropout_passes=2,
-        warn_threshold=0.40,
-        retract_threshold=0.65,
+        warn_threshold=0.35,
+        retract_threshold=0.52,
     )
 
     async def event_generator():
